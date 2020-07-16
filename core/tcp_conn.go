@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"os"
 	"sync"
 	"time"
 	"unsafe"
@@ -66,8 +67,8 @@ type tcpConn struct {
 	connKey       uint32
 	canWrite      *sync.Cond // Condition variable to implement TCP backpressure.
 	state         tcpConnState
-	sndPipeReader *io.PipeReader
-	sndPipeWriter *io.PipeWriter
+	sndPipeReader net.Conn
+	sndPipeWriter net.Conn
 	closeOnce     sync.Once
 	closeErr      error
 }
@@ -86,7 +87,7 @@ func newTCPConn(pcb *C.struct_tcp_pcb, handler TCPConnHandler) (TCPConn, error) 
 	setTCPErrCallback(pcb)
 	setTCPPollCallback(pcb, C.u8_t(TCP_POLL_INTERVAL))
 
-	pipeReader, pipeWriter := io.Pipe()
+	pipeReader, pipeWriter := net.Pipe()
 	conn := &tcpConn{
 		pcb:           pcb,
 		handler:       handler,
@@ -137,13 +138,13 @@ func (conn *tcpConn) LocalAddr() net.Addr {
 }
 
 func (conn *tcpConn) SetDeadline(t time.Time) error {
-	return nil
+	return os.ErrNoDeadline
 }
 func (conn *tcpConn) SetReadDeadline(t time.Time) error {
-	return nil
+	return conn.sndPipeReader.SetReadDeadline(t)
 }
 func (conn *tcpConn) SetWriteDeadline(t time.Time) error {
-	return nil
+	return os.ErrNoDeadline
 }
 
 func (conn *tcpConn) receiveCheck() error {
